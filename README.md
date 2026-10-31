@@ -1,249 +1,184 @@
-# Android TV MCP Server (barn fork)
+<div align="center">
 
-> **The Android TV diagnostic MCP (fork of us-all/android-mcp) — when an app crashes, leaks memory, drains battery, or behaves unexpectedly, this is what you point at the device.**
->
-> 76 tools across logcat / dumpsys / package internals / system properties / processes. 5 MCP Prompts (crash-investigation, memory-leak-detection, permission-audit, app-startup-profile, ui-element-locator) and a `device-health` aggregation. Pure ADB, no Appium / uiautomator2 dependency. 2-tier security (write + shell gates).
+# 📱 Android MCP
 
-[![npm](https://img.shields.io/npm/v/@estate/android-tv-mcp)](https://www.npmjs.com/package/@estate/android-tv-mcp)
-[![downloads](https://img.shields.io/npm/dm/@estate/android-tv-mcp)](https://www.npmjs.com/package/@estate/android-tv-mcp)
-[![tools](https://img.shields.io/badge/tools-76-blue)](#tools)
-[![@estate standard](https://img.shields.io/badge/built%20to-%40us--all%20MCP%20standard-blue)](https://github.com/toxicwind/android-tv-mcp/blob/main/STANDARD.md)
-[![Glama MCP server](https://glama.ai/mcp/servers/toxicwind/android-tv-mcp/badges/score.svg)](https://glama.ai/mcp/servers/toxicwind/android-tv-mcp)
+### ADB-driven Android control for the estate — device-first, profile-aware, read-only by default
 
-## What it does that others don't
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-server-orange?style=for-the-badge)](https://modelcontextprotocol.io)
+[![tests](https://img.shields.io/badge/tests-102%20green-brightgreen?style=for-the-badge)](#)
+[![estate](https://img.shields.io/badge/estate-barn-yellow?style=for-the-badge)](https://github.com/toxicwind/estate)
 
-- **Diagnostic depth** — logcat search/crash extraction, `dumpsys` (mem/gfx/cpu), getprop, processes, package internals, app intents, port forwards. Cross-platform competitors hide this surface.
-- **MCP Prompts** (5) — `crash-investigation`, `memory-leak-detection`, `ui-element-locator`, `app-startup-profile`, `permission-audit`. Workflow templates the model invokes directly.
-- **Aggregation tools** — `device-health` (battery + memory + cpu + network in one call), `analyze-app` (package info + memory + activities).
-- **2-tier security** — `ANDROID_MCP_ALLOW_WRITE` (gates installs/taps/pushes) and `ANDROID_MCP_ALLOW_SHELL` (gates arbitrary `adb shell`) are separate flags. Distinct trust levels.
-- **Pure ADB** — no Appium, no uiautomator2, no Python bridge. Just the official Android Debug Bridge wrapped over `child_process`.
-- **Token-efficient by design** — 56 schema-trim sweep, `ANDROID_TOOLS`/`ANDROID_DISABLE` 9 categories, `search-tools` meta.
-- **Apps SDK card** — `device-health` renders as a snapshot card on ChatGPT clients (battery, RAM, Wi-Fi + 4-section grid) via `_meta["openai/outputTemplate"]`. Claude clients receive the same JSON content.
-- **stdio + Streamable HTTP** — defaults to stdio. Set `MCP_TRANSPORT=http` for ChatGPT Apps SDK or remote clients (Bearer auth via `MCP_HTTP_TOKEN`).
+**See, drive, and debug any Android device over ADB — with first-class device profiles so one server targets the whole fleet.**
 
-## Try this — 5 prompts
+</div>
 
-Connect the server to Claude Desktop or Claude Code, then paste any of these:
+---
 
-1. **Crash investigation** — *"My app `com.us-all.api` keeps crashing on this Pixel 6 emulator. Pull the last crash log, the offending stack frames, and any recent permission changes."*
-2. **Memory leak detection** — *"Trace memory growth for `com.us-all.api` over the last 5 minutes. Show heap deltas, GC pressure, and the largest allocators."*
-3. **Battery drain attribution** — *"What's draining battery on this device? Top 5 consumers, duration of each, and current battery health."*
-4. **Permission audit** — *"Audit installed 3rd-party apps for dangerous permissions (location/camera/contacts/microphone). Flag any app that hasn't been used in the last 30 days but holds these."*
-5. **App startup profile** — *"Profile the cold-start of `com.us-all.api` — measure activity launch time, identify the slowest fragment init, and suggest where to add tracing."*
+## Why this exists
 
-## When to use this vs mobile-next/mobile-mcp
+The estate's Android fleet is heterogeneous: a **Hisense Android TV** and a
+**Pixel 9 Pro XL**, each a different device with a different ADB target. Driving
+them raw by serial is fragile (and the Pixel's ADB port *rotates* on re-pair).
+`android-mcp` wraps ADB behind the Model Context Protocol and adds a **device
+profile registry** — so the agent says "check the TV" or "target the Pixel",
+and the server resolves the right serial automatically.
 
-[`mobile-next/mobile-mcp`](https://github.com/mobile-next/mobile-mcp) (4.7K★) is the cross-platform action-oriented MCP. Different problem space:
+This product is a **hard fork merge** of
+[`us-all/android-mcp-server`](https://github.com/us-all/android-mcp-server)
+(v1.14.4) — chosen over martingeidobler and nexus-android via a trio-compare of
+the candidates (the engines are near-orthogonal; see the fork decision below).
 
-| | mobile-mcp | `@estate/android-tv-mcp` (this) |
-|--|---|---|
-| Platform | iOS + Android (cross-platform) | Android only (specialist) |
-| Posture | Action-oriented ("drive the app via NL") | Diagnostic ("tell me why it broke") |
-| UI surface | Accessibility-tree-first, action loops | UI hierarchy + screenshots + diagnostic dumps |
-| Diagnostic depth | minimal | logcat / dumpsys / getprop / processes / crashes |
-| Aggregations | — | `device-health`, `analyze-app` |
-| MCP Prompts | — | 5 (diagnostic-themed) |
-| Security gates | basic | 2-tier (write + shell separate) |
-| Distribution | broad (12+ IDE buttons) | npm + Docker |
+---
 
-**Use both — they're complementary.** mobile-mcp drives the device through your QA flows; this MCP tells you why it broke when something does. Especially:
-- mobile-mcp finds the bug via UI exploration → this MCP captures the crash log + heap dump.
-- mobile-mcp can't tell you why startup is slow → this MCP gives you `dumpsys gfxinfo` + activity launch timing.
-- mobile-mcp can't reproduce a permission denial → this MCP shows the exact `dumpsys package` permission state and recent grants.
+## ✨ Features
 
-## Install
+- **77 tools + `search-tools` meta** across device / UI / apps / logcat / files / system / shell
+- **Device profiles** — each Android device is a named profile (serial, model,
+  platform codename) resolved through a single strict chokepoint
+- **Read-only by default** — writes need `ANDROID_MCP_ALLOW_WRITE=true`, shell
+  needs `ANDROID_MCP_ALLOW_SHELL=true` (independent gates)
+- **stdio + Streamable HTTP** — run locally or expose over the LAN with Bearer
+  auth
+- **Diagnostic depth** — logcat search/crash extraction, dumpsys
+  (mem/gfx/cpu), getprop, processes, package internals
 
-### Claude Desktop
+---
 
-```json
-{
-  "mcpServers": {
-    "android": {
-      "command": "npx",
-      "args": ["-y", "@estate/android-tv-mcp"],
-      "env": {
-        "ANDROID_MCP_ALLOW_WRITE": "true"
-      }
-    }
-  }
-}
+## 📊 Device profiles
+
+| profile | id (serial) | model | adb target | role |
+|---------|-------------|-------|-----------|------|
+| `hisense-wuyishan` **(default)** | `0000dc9a7d3e0b65` | SmartTV 4K FFM | `10.0.0.225:5555` | living-room TV |
+| `pixel-9-pro-xl` | `4C121FDAS0004Y` | Pixel 9 Pro XL | `10.0.0.77:36993` | hardware auth SSOT |
+
+Select a profile:
+- **Environment** — `ANDROID_PROFILE=hisense-wuyishan` (default), or
+- **Per call** — pass `serial="pixel-9-pro-xl"` to any tool that takes a serial.
+
+> 🔑 The Pixel's adb port is **volatile** (`:36993` rotates when re-paired via
+> wireless debugging / Flotilla `:25245`). Update `pixel-9-pro-xl.adbSerial`
+> when it changes — the profile *id* (ro.serialno `4C121FDAS0004Y`) is stable.
+
+### How profile resolution works (the hard-merge)
+
+Two deliberately-distinct functions in `src/profiles.ts`:
+
+| function | behavior | used by |
+|----------|----------|---------|
+| `resolveProfile` | lenient — falls back to the **default** profile | active-profile accessor |
+| `lookupProfile` | strict — returns `undefined` unless the key matches a profile *identity* (name/id/model/platform) | the adb chokepoint |
+
+The adb chokepoint (`src/adb.ts` `buildArgs`) routes a tool's `serial` param
+through `lookupProfile`, so **every** tool that takes `serial` becomes
+profile-aware — while a raw adb address like `10.0.0.77:36993` passes through
+verbatim and is **never** silently retargeted to the default device.
+
+```mermaid
+flowchart LR
+    A[agent] -->|MCP| B[android-mcp]
+    B --> C[adb.ts buildArgs<br/>lookupProfile strict resolve]
+    C --> D{serial is a profile?}
+    D -->|yes| E[profile.adbSerial]
+    D -->|no| F[serial passed through verbatim]
+    E --> G[adb -s <target>]
+    F --> G
 ```
 
-### Claude Code
+---
+
+## 🚀 Quick start
 
 ```bash
-claude mcp add android -s user \
-  -e ANDROID_MCP_ALLOW_WRITE=true \
-  -e ANDROID_MCP_ALLOW_SHELL=true \
-  -- npx -y @estate/android-tv-mcp
-```
+pnpm install --frozen-lockfile
 
-### Docker
+pnpm test           # 102 tests (vitest)
+pnpm build          # tsc → dist/
 
-```bash
-docker run --rm \
-  --device /dev/bus/usb \
-  -e ANDROID_MCP_ALLOW_WRITE=true \
-  ghcr.io/toxicwind/android-tv-mcp:latest
-```
-
-### Build from source
-
-```bash
-git clone https://github.com/toxicwind/android-tv-mcp.git
-cd android-mcp-server && pnpm install && pnpm build
+# run as stdio MCP (default profile = Hisense TV)
 node dist/index.js
+
+# expose over HTTP with Bearer token
+MCP_TRANSPORT=http MCP_HTTP_TOKEN=secret MCP_HTTP_PORT=37009 node dist/index.js
 ```
 
-### Prerequisites
+> Requires **Node 22+** (this fork is a Node-runtime product; pnpm 10 + vitest).
+> ADB must be on `PATH` or set `ADB_PATH`.
 
-- ADB installed and on `PATH` (or set `ADB_PATH`)
-- Android device or emulator with USB debugging enabled
-- For multi-device setups: `ANDROID_SERIAL=<serial>` to target a specific one
+---
 
-## Configuration
+## 🔧 Tool categories
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `ANDROID_HOME` | ❌ | auto-detect | Android SDK path |
-| `ADB_PATH` | ❌ | `adb` (PATH) | Path to ADB binary |
-| `ANDROID_SERIAL` | ❌ | auto (single device) | Target device serial |
-| `ANDROID_MCP_ALLOW_WRITE` | ❌ | `false` | Enable write operations (install, tap, push) |
-| `ANDROID_MCP_ALLOW_SHELL` | ❌ | `false` | Enable arbitrary `adb shell` execution |
-| `ANDROID_TOOLS` | ❌ | — | Comma-sep allowlist of categories. Biggest token saver. |
-| `ANDROID_DISABLE` | ❌ | — | Comma-sep denylist. Ignored when `ANDROID_TOOLS` is set. |
-| `MCP_TRANSPORT` | ❌ | `stdio` | `http` to enable Streamable HTTP transport |
-| `MCP_HTTP_TOKEN` | conditional | — | Bearer token. Required when `MCP_TRANSPORT=http` |
-| `MCP_HTTP_PORT` | ❌ | `3000` | HTTP listen port |
-| `MCP_HTTP_HOST` | ❌ | `127.0.0.1` | HTTP bind host (DNS rebinding protection auto-enabled for localhost) |
-| `MCP_HTTP_SKIP_AUTH` | ❌ | `false` | Skip Bearer auth — e.g. behind a reverse proxy that handles it |
+| Category | Coverage |
+|----------|----------|
+| Device | list/info/properties, wireless connect/disconnect |
+| Apps | install/uninstall/launch, permissions, intents, data-clear |
+| UI | screenshot, UI hierarchy, tap/swipe/type/key, annotated tap |
+| Logcat | capture/filter/clear/crash-extract |
+| Files | list/pull/push/delete |
+| System | battery/network/settings/display/wifi/notifications |
+| Debug | bugreport, mem/gfx/cpu info |
+| Shell | `execute-shell` (gated) |
+| Meta | `list-profiles`, `search-tools` |
 
-**Categories** (9): `device`, `apps`, `ui`, `logcat`, `emulator`, `files`, `system`, `debug`, `shell` (always-gated by `ANDROID_MCP_ALLOW_SHELL`), plus always-on `meta`.
+---
 
-When `MCP_TRANSPORT=http`: `POST /mcp` (Bearer-auth JSON-RPC) + `GET /health` (public liveness).
+## ⚙️ Configuration
 
-### Token efficiency
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ADB_PATH` | `adb` | adb binary path |
+| `ANDROID_SERIAL` | profile serial | target device serial |
+| `ANDROID_PROFILE` | `hisense-wuyishan` | active device profile |
+| `ANDROID_MCP_ALLOW_WRITE` | `false` | enable write ops (install/tap/push) |
+| `ANDROID_MCP_ALLOW_SHELL` | `false` | enable arbitrary `adb shell` |
+| `ANDROID_TOOLS` / `ANDROID_DISABLE` | — | category allow/deny (token saver) |
+| `MCP_TRANSPORT` | `stdio` | `http` for Streamable HTTP |
+| `MCP_HTTP_TOKEN` | — | Bearer token (required for http) |
 
-| Scenario | Tools | Schema tokens | vs default |
-|----------|------:|--------------:|-----------:|
-| default (all categories) | 76 | 9,200 | — |
-| typical (`ANDROID_TOOLS=device,ui,apps,logcat`) | 37 | 5,000 | −46% |
-| narrow (`ANDROID_TOOLS=device,ui`) | 19 | **2,500** | **−73%** |
+---
 
-Plus `search-tools` meta-tool (always enabled) for runtime tool discovery.
+## 🧪 Testing
 
-### Read-only mode (default)
+102 tests across 12 files (vitest), including the profiles hard-merge
+contract (`tests/profiles.test.ts`, `tests/adb-profile.test.ts`) that pins:
+- profile identities resolve to their adbSerial
+- raw adb addresses are NOT profile keys (pass through, never retargeted)
+- the default profile (Hisense) is index 0
 
-By default, only read operations are permitted. Write operations (`tap`, `install-app`, `push-file`, etc.) return an error unless `ANDROID_MCP_ALLOW_WRITE=true`. Shell command execution requires a **separate** `ANDROID_MCP_ALLOW_SHELL=true` for additional security — even with write enabled, raw shell stays blocked unless this is explicitly set.
-
-## MCP Prompts (5)
-
-Workflow templates available via MCP `prompts/list`:
-
-- `crash-investigation` — pull crash logs + stack frames + recent permission changes for a target package.
-- `memory-leak-detection` — track heap delta over a window; cluster by allocator.
-- `ui-element-locator` — find a UI element by visual + accessibility hints; return tap coordinates.
-- `app-startup-profile` — cold-start profile: activity launch + fragment init + first frame.
-- `permission-audit` — flag dangerous permissions held by under-used 3rd-party apps.
-
-## MCP Resources
-
-URI-based read-only entities:
-
-- `android://devices` — connected devices
-- `android://device/{serial}` — device details (model/brand/version/display)
-- `android://app/{packageName}/activities` — activities exposed by a package (exported/launchable flags)
-- `android://device/{serial}/processes` — running processes
-
-## Tools (76)
-
-9 categories. Use `search-tools` to discover at runtime; full list collapsed below.
-
-| Category | Tools |
-|----------|------:|
-| System (battery / network / settings / display / orientation / port-fwd / wifi / mobile-data) | 19 |
-| Apps (install / launch / permissions / intents / data clear) | 14 |
-| UI (tap / swipe / screenshot / hierarchy / accessibility / annotated tap-by-index / screen recording) | 14 |
-| Emulator (AVD start/stop, snapshot mgmt) | 7 |
-| Device (list / info / properties / wireless connect) | 5 |
-| Debug (bugreport / mem / gfx / cpu / doctor) | 5 |
-| Logcat (capture / filter / clear / crash extract) | 4 |
-| Files (list / pull / push / delete) | 4 |
-| Shell (gated `execute-shell`) | 1 |
-| Aggregations (`device-health`, `analyze-app`) | 2 |
-| Meta (`search-tools`) | 1 |
-
-<details>
-<summary>Full tool list</summary>
-
-### Device (5)
-`list-devices`, `get-device-info`, `get-device-properties`, `connect-device`, `disconnect-device`
-
-### Apps (14)
-`list-packages`, `get-package-info`, `install-app`, `uninstall-app`, `launch-app`, `stop-app`, `clear-app-data`, `grant-permission`, `revoke-permission`, `open-url`, `send-broadcast`, `get-current-activity`, `is-app-installed`, `get-app-intents`
-
-### UI Automation (14)
-`take-screenshot`, `dump-ui-hierarchy`, `ui-snapshot-a11y`, `tap`, `long-press`, `swipe`, `input-text`, `press-key`, `drag-and-drop`, `start-screen-recording`, `pull-screen-recording`, `double-tap`, `take-annotated-screenshot`, `tap-element`
-
-### Logcat (4)
-`get-logcat`, `clear-logcat`, `search-logcat`, `get-crash-logs`
-
-### Emulator (7)
-`list-avds`, `start-emulator`, `stop-emulator`, `list-snapshots`, `load-snapshot`, `save-snapshot`, `delete-snapshot`
-
-### Files (4)
-`list-files`, `pull-file`, `push-file`, `delete-file`
-
-### System (19)
-`get-battery-info`, `get-network-info`, `change-setting`, `get-setting`, `set-display-size`, `set-display-density`, `keep-screen-on`, `port-forward`, `reverse-forward`, `list-forwards`, `remove-forward`, `toggle-wifi`, `toggle-mobile-data`, `open-notification`, `lock-device`, `unlock-device`, `get-orientation`, `set-orientation`, `list-settings`
-
-### Debug (5)
-`bugreport`, `get-mem-info`, `get-gfx-info`, `get-cpu-info`, `doctor`
-
-### Shell (1)
-`execute-shell` — gated by `ANDROID_MCP_ALLOW_SHELL`
-
-### Aggregations
-`device-health` — battery + memory + cpu + network in one call (~7KB response, 4 sub-systems with caveats).
-`analyze-app` — package info + memory + activities aggregation.
-
-### Meta
-`search-tools` — query other tools by keyword; always enabled.
-
-</details>
-
-## Architecture
-
-```
-Claude → MCP stdio → src/index.ts
-                      ├── adb.ts (execFile wrapper)
-                      ├── tools/utils.ts (wrapToolHandler, shellEscape, validation)
-                      └── tools/{device,apps,ui,logcat,emulator,files,system,debug,shell,aggregations}.ts
-                                  ↓
-                          ADB CLI (USB / TCP-IP / Emulator)
-                                  ↓
-                          Android Device
+```bash
+pnpm test
 ```
 
-Built on [`@us-all/mcp-toolkit`](https://github.com/us-all/mcp-toolkit):
-- `extractFields` — token-efficient response projections (skipped for ADB flat-array endpoints)
-- `aggregate(fetchers, caveats)` — fan-out helper for `device-health` / `analyze-app`
-- `createWrapToolHandler` — `WriteBlockedError`/`ShellBlockedError` passthrough + structured ADB errors (`{code, stderr}`)
-- `wrapImageToolHandler` (Android-only) — base64 PNG sanitization
-- `search-tools` meta-tool
+---
 
-## Security
+## 🔀 Fork decision (receipt)
+
+Chosen basis: **us-all/android-mcp-server** (76 tools, 2-tier security, stdio +
+HTTP). Compared against martingeidobler (25 tools, emulator-oriented) and
+nexus-android (native) with the trio compare engine — the candidates are
+**near-orthogonal implementations** (token Jaccard 0.01–0.03), so the fork was
+vendored wholesale and renamed, never partially merged. The compare output is
+pinned in `pens/agentic-moment/products/site/compare/fixtures/android-mcp-compare.json`.
+
+---
+
+## 🔒 Security & license
 
 - **Read-only by default.** Writes blocked without `ANDROID_MCP_ALLOW_WRITE=true`.
-- **Shell gating separate.** `execute-shell` blocked without `ANDROID_MCP_ALLOW_SHELL=true` even with write enabled — distinct trust levels.
-- **Shell injection safe.** `shellEscape` for single-quote-based escape; input validation via zod regex whitelists for setting keys, package names, permissions, components, broadcast actions/extras.
-- **Path-traversal blocked.** Device paths require absolute + no `..` + no shell metachars.
-- **Error sanitization.** API keys, tokens, passwords redacted from all error outputs.
+- **Shell gating separate.** `execute-shell` needs `ANDROID_MCP_ALLOW_SHELL=true`
+  even with write enabled.
+- **HTTP transport requires a Bearer token** (`MCP_HTTP_TOKEN`); prefers
+  localhost binding.
+- **License:** MIT + upstream. Forked 2026-10-31 from
+  `us-all/android-mcp-server`; `@us-all/mcp-toolkit` npm dep retained (real
+  runtime dependency).
 
-## Tech stack
+---
 
-Node.js 22+ • TypeScript strict ESM • pnpm 10 • `@modelcontextprotocol/sdk` 1.29+ • zod v4 • fast-xml-parser • vitest (fork pool isolation).
+## 📦 Source
 
-## License
-
-[MIT](./LICENSE)
+`pens/barn/products/android-mcp/` (canonical). Registered in the estate as the
+`android-mcp` MCP upstream (`thresher` → `node dist/index.js`), default profile
+Hisense TV. Deploy after edits: `pnpm build && /usr/local/bin/android-mcp` →
+`~/.local/bin/android-mcp` symlink.
