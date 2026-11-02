@@ -40,7 +40,7 @@ export const PROFILES: DeviceProfile[] = [
 		platform: { product: "wuyishan", board: "MT9900", hardware: "mt5895" },
 		adbSerial: "10.0.0.225:5555",
 		role: "living-room TV",
-		notes: "Hisense SmartTV 4K FFM (downstairs), Android 11, redlight Kodi fork (wizard.red.the)",
+		notes: "Hisense SmartTV 4K FFM (downstairs), Android 11. Runs the redlight Kodi fork: package wizard.red.the v21.2.1 (NOT com.org.xbmc.kodi), JSON-RPC at http://10.0.0.225:8080/jsonrpc (no auth) — coreelec-mcp targets it via host param. AUDIO GOTCHA (2026-10-31): soundbar is eARC on HDMI port 3; Android routes STREAM_MUSIC to AUDIO_DEVICE_OUT_HDMI_ARC; if dumpsys hdmi_control shows mArcEstablished:false the frames flow into a dead circuit (video plays, no sound) — clear by soundbar power-cycle or TV reboot, not by app restart. Port 5555 is fixed (USB debugging), unlike the Pixel's rotating port.",
 	},
 	{
 		id: "4C121FDAS0004Y",
@@ -50,7 +50,7 @@ export const PROFILES: DeviceProfile[] = [
 		platform: { product: "komodo_beta", board: "komodo", hardware: "komodo" },
 		adbSerial: "10.0.0.77:36993",
 		role: "hardware auth SSOT",
-		notes: "Pixel 9 Pro XL (architect's primary hardware authenticator). ADB port is volatile — re-pair via Flotilla MCP (:25245) or wireless debugging when 36993 expires.",
+		notes: "Pixel 9 Pro XL (architect's primary hardware authenticator). ADB port is volatile — when the recorded port expires, rediscover via `adb mdns services` / wireless-debugging pairing. DO NOT rely on Flotilla MCP (:25245) — it is DOWN as of 2026-10-31 (upstream connection refused); revive the flotilla-mcp pitchfork daemon first (products/estate-ops). ro.serialno verified 2026-10-31.",
 	},
 ];
 
