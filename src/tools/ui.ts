@@ -3,6 +3,22 @@ import { XMLParser } from "fast-xml-parser";
 import sharp from "sharp";
 import { adb, adbShell, adbRawBuffer } from "../adb.js";
 import { assertWriteAllowed, shellEscape, validateKeycode } from "./utils.js";
+import { uia2Source, uia2Tap, displayScreenshot } from "./uia2.js";
+
+// Fleet architect order 2026-11-05: DISPLAY 2 IS THE PERMANENT DEFAULT for all
+// android work (the transparent full-control overlay). Display 0 is the user's
+// main screen — never touched unless explicitly requested.
+export const DEFAULT_DISPLAY: number = 2;
+
+const displayField = () =>
+  z.coerce
+    .number()
+    .int()
+    .optional()
+    .default(DEFAULT_DISPLAY)
+    .describe(
+      `Target display id (default ${DEFAULT_DISPLAY} — the secondary android desktop per fleet order 2026-11-05). Use 0 only to explicitly touch the main screen.`,
+    );
 
 // --- Schemas ---
 
@@ -32,6 +48,7 @@ export const takeScreenshotSchema = z.object({
     .describe(
       "Optional cap on output width in pixels. Downscales preserving aspect ratio. No-op if the image is already narrower.",
     ),
+  display: displayField(),
   serial: z
     .string()
     .optional()
@@ -46,6 +63,7 @@ export const dumpUiHierarchySchema = z.object({
     .describe(
       "Return compact format (interactive elements only) for token efficiency. Default: true.",
     ),
+  display: displayField(),
   serial: z
     .string()
     .optional()
@@ -55,6 +73,7 @@ export const dumpUiHierarchySchema = z.object({
 export const tapSchema = z.object({
   x: z.coerce.number().describe("X coordinate to tap."),
   y: z.coerce.number().describe("Y coordinate to tap."),
+  display: displayField(),
   serial: z
     .string()
     .optional()
@@ -87,6 +106,7 @@ export const swipeSchema = z.object({
     .optional()
     .default(300)
     .describe("Duration in milliseconds (default: 300)."),
+  display: displayField(),
   serial: z
     .string()
     .optional()
@@ -95,6 +115,7 @@ export const swipeSchema = z.object({
 
 export const inputTextSchema = z.object({
   text: z.string().describe("Text to input. Special characters will be escaped."),
+  display: displayField(),
   serial: z
     .string()
     .optional()
@@ -107,6 +128,7 @@ export const pressKeySchema = z.object({
     .describe(
       "Key to press, e.g. 'KEYCODE_BACK', 'KEYCODE_HOME', 'KEYCODE_ENTER'.",
     ),
+  display: displayField(),
   serial: z
     .string()
     .optional()
@@ -177,13 +199,20 @@ export function flattenNodes(
     result.push(element);
   }
 
-  const children = node["node"];
-  if (Array.isArray(children)) {
-    for (const child of children) {
-      flattenNodes(child, result, compact);
+  // Children under `node` (stock uiautomator XML) OR under class-named tags
+  // (UiAutomator2-server XML: <android.widget.FrameLayout>…). Any non-attribute
+  // key whose value is an object/array of objects is a child container.
+  for (const [key, value] of Object.entries(node)) {
+    if (key.startsWith("@_") || key === "#text") continue;
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        if (child && typeof child === "object") {
+          flattenNodes(child as Record<string, unknown>, result, compact);
+        }
+      }
+    } else if (value && typeof value === "object") {
+      flattenNodes(value as Record<string, unknown>, result, compact);
     }
-  } else if (children && typeof children === "object") {
-    flattenNodes(children as Record<string, unknown>, result, compact);
   }
 }
 
@@ -193,7 +222,7 @@ export async function takeScreenshot(
   params: z.infer<typeof takeScreenshotSchema>,
 ) {
   const opts = params.serial ? { serial: params.serial } : undefined;
-  const buffer = await adbRawBuffer(["exec-out", "screencap", "-p"], opts);
+  const buffer = await displayScreenshot(params.display ?? DEFAULT_DISPLAY, opts);
 
   // Fast path: caller wants the raw PNG with no resize → skip sharp entirely.
   // screencap -p already emits a valid PNG.
@@ -250,9 +279,17 @@ export async function dumpUiHierarchy(
   params: z.infer<typeof dumpUiHierarchySchema>,
 ) {
   const opts = params.serial ? { serial: params.serial } : undefined;
+  const display = params.display ?? DEFAULT_DISPLAY;
 
-  await adbShell("uiautomator dump /sdcard/window_dump.xml", opts);
-  const xml = await adbShell("cat /sdcard/window_dump.xml", opts);
+  // Display 0: stock uiautomator dump. Secondary displays: the UiAutomator2
+  // server is the only display-aware source (stock dump is display-0-bound).
+  let xml: string;
+  if (display === 0) {
+    await adbShell("uiautomator dump /sdcard/window_dump.xml", opts);
+    xml = await adbShell("cat /sdcard/window_dump.xml", opts);
+  } else {
+    xml = await uia2Source(display, opts);
+  }
 
   const parser = new XMLParser({
     ignoreAttributes: false,
@@ -462,8 +499,15 @@ export async function uiSnapshotA11y(
 export async function tap(params: z.infer<typeof tapSchema>) {
   assertWriteAllowed();
   const opts = params.serial ? { serial: params.serial } : undefined;
-  await adbShell(`input tap ${params.x} ${params.y}`, opts);
-  return { result: `Tapped at (${params.x}, ${params.y})` };
+  const display = params.display ?? DEFAULT_DISPLAY;
+  if (display === 0) {
+    await adbShell(`input tap ${params.x} ${params.y}`, opts);
+  } else {
+    // Secondary displays: W3C actions via the uia2 server (adb input -d is a
+    // silent no-op that lands on display 0 — never used).
+    await uia2Tap(params.x, params.y, display, opts);
+  }
+  return { result: `Tapped at (${params.x}, ${params.y}) on display ${display}` };
 }
 
 export async function longPress(params: z.infer<typeof longPressSchema>) {
@@ -697,11 +741,16 @@ export async function tapElement(
 ) {
   assertWriteAllowed();
   const opts = params.serial ? { serial: params.serial } : undefined;
+  const display = DEFAULT_DISPLAY; // tapElement indexes come from annotated dumps (display-2 by default)
 
-  // Get current UI hierarchy to find the element
-  await adbShell("uiautomator dump /sdcard/window_dump.xml", opts);
-  const xml = await adbShell("cat /sdcard/window_dump.xml", opts);
-
+  // Get current UI hierarchy to find the element (display-aware)
+  let xml: string;
+  if (display === 0) {
+    await adbShell("uiautomator dump /sdcard/window_dump.xml", opts);
+    xml = await adbShell("cat /sdcard/window_dump.xml", opts);
+  } else {
+    xml = await uia2Source(display, opts);
+  }
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "@_",
@@ -725,12 +774,13 @@ export async function tapElement(
     throw new Error(`Element ${params.index} has no center coordinates`);
   }
 
-  await adbShell(
-    `input tap ${target.center.x} ${target.center.y}`,
-    opts,
-  );
+  if (display === 0) {
+    await adbShell(`input tap ${target.center.x} ${target.center.y}`, opts);
+  } else {
+    await uia2Tap(target.center.x, target.center.y, display, opts);
+  }
 
   return {
-    result: `Tapped element [${params.index}] "${target.text ?? target.contentDesc ?? target.class}" at (${target.center.x}, ${target.center.y})`,
+    result: `Tapped element [${params.index}] "${target.text ?? target.contentDesc ?? target.class}" at (${target.center.x}, ${target.center.y}) on display ${display}`,
   };
 }
