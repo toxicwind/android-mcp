@@ -119,12 +119,23 @@ export async function uia2Tap(x: number, y: number, displayId: number, opts?: Ad
   }
 }
 
-/** Display-aware screenshot via on-device screencap -d N. */
+/** Display-aware screenshot. Virtual displays (overlay:*) are NOT capturable
+ * via stock `screencap -d N` ("Display Id is not valid") — falls back to the
+ * uia2 server's screenshot endpoint, which follows currentDisplayId. */
 export async function displayScreenshot(displayId: number, opts?: AdbOptions): Promise<Buffer> {
   if (displayId === 0) {
     return adbRawBuffer(["exec-out", "screencap", "-p"], opts);
   }
-  return adbRawBuffer(["exec-out", "screencap", "-d", String(displayId), "-p"], opts);
+  const direct = await adbRawBuffer(["exec-out", "screencap", "-d", String(displayId), "-p"], opts);
+  if (direct.length > 1024) return direct; // real PNG
+  // Virtual-display fallback: uia2 screenshot (base64 PNG).
+  const sid = await uia2Session(displayId, opts);
+  const res = await uia2Fetch(`/session/${sid}/screenshot`);
+  const value = res.value;
+  if (typeof value === "string" && value.length > 1024) {
+    return Buffer.from(value, "base64");
+  }
+  throw new Error(`display ${displayId} screenshot failed via screencap and uia2`);
 }
 
 /** List displays via uia2 (mobile: listDisplays). */
