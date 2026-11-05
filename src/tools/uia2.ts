@@ -127,7 +127,9 @@ export async function displayScreenshot(displayId: number, opts?: AdbOptions): P
     return adbRawBuffer(["exec-out", "screencap", "-p"], opts);
   }
   const direct = await adbRawBuffer(["exec-out", "screencap", "-d", String(displayId), "-p"], opts);
-  if (direct.length > 1024) return direct; // real PNG
+  if (direct.length > 8 && direct[0] === 0x89 && direct[1] === 0x50 && direct[2] === 0x4e && direct[3] === 0x47) {
+    return direct; // real PNG (magic bytes \x89PNG — screencap errors are ASCII text)
+  }
   // Virtual-display fallback: uia2 screenshot (base64 PNG).
   const sid = await uia2Session(displayId, opts);
   const res = await uia2Fetch(`/session/${sid}/screenshot`);
