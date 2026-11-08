@@ -8,7 +8,18 @@ import { uia2Source, uia2Tap, displayScreenshot } from "./uia2.js";
 // Fleet architect order 2026-11-05: DISPLAY 2 IS THE PERMANENT DEFAULT for all
 // android work (the transparent full-control overlay). Display 0 is the user's
 // main screen — never touched unless explicitly requested.
-export const DEFAULT_DISPLAY: number = 2;
+/**
+ * Default target display, device-aware: the pixel-9-pro-xl desktop mode is
+ * display 2 (fleet order 2026-11-05); every other device (Hisense wuyishan)
+ * is display 0 only. Hardcoding 2 crashed the Hisense lane (fetch failed).
+ */
+export function defaultDisplayFor(profileName?: string): number {
+  return profileName?.toLowerCase().includes("pixel") ? 2 : 0;
+}
+
+export const DEFAULT_DISPLAY: number = defaultDisplayFor(
+  typeof process !== "undefined" ? process.env.ANDROID_PROFILE : undefined,
+);
 
 const displayField = () =>
   z.coerce
