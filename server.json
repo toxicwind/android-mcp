@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.estate/android-mcp",
+  "name": "io.github.Pens/android-mcp",
   "description": "Android MCP - ADB control with device profiles (Hisense TV, Pixel 9 Pro XL)",
   "repository": {
     "url": "https://github.com/toxicwind/android-mcp",
@@ -10,7 +10,7 @@
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "@estate/android-mcp",
+      "identifier": "@Pens/android-mcp",
       "version": "1.13.2",
       "transport": {
         "type": "stdio"

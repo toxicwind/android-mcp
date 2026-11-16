@@ -26,7 +26,7 @@ export interface DeviceProfile {
 	};
 	/** ADB serial that actually targets this device (serial == ip:port for wifi). */
 	adbSerial: string;
-	/** Role in the estate. */
+	/** Role in the Pens. */
 	role: string;
 	notes: string;
 }
@@ -50,7 +50,7 @@ export const PROFILES: DeviceProfile[] = [
 		platform: { product: "komodo_beta", board: "komodo", hardware: "komodo" },
 		adbSerial: "10.0.0.77:40301",
 		role: "hardware auth SSOT",
-		notes: "Pixel 9 Pro XL (architect's primary hardware authenticator). ADB port is volatile — when the recorded port expires, rediscover via `adb mdns services` / wireless-debugging pairing. DO NOT rely on Flotilla MCP (:25245) — it is DOWN as of 2026-10-31 (upstream connection refused); revive the flotilla-mcp pitchfork daemon first (products/estate-ops). ro.serialno verified 2026-10-31.",
+		notes: "Pixel 9 Pro XL (architect's primary hardware authenticator). ADB port is volatile — when the recorded port expires, rediscover via `adb mdns services` / wireless-debugging pairing. DO NOT rely on Flotilla MCP (:25245) — it is DOWN as of 2026-10-31 (upstream connection refused); revive the flotilla-mcp pitchfork daemon first (products/Pens-ops). ro.serialno verified 2026-10-31.",
 	},
 ];
 

@@ -1,7 +1,7 @@
 {
-  "name": "@estate/android-mcp",
+  "name": "@Pens/android-mcp",
   "version": "1.14.4",
-  "mcpName": "io.github.estate/android-mcp",
+  "mcpName": "io.github.Pens/android-mcp",
   "description": "Android MCP server (hard-fork merge of us-all/android-mcp) — ADB device/UI/app control with device profiles (Hisense TV, Pixel 9 Pro XL)",
   "type": "module",
   "main": "dist/index.js",

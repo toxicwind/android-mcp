@@ -2,12 +2,12 @@
 
 # 📱 Android MCP
 
-### ADB-driven Android control for the estate — device-first, profile-aware, read-only by default
+### ADB-driven Android control for the Pens — device-first, profile-aware, read-only by default
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-server-orange?style=for-the-badge)](https://modelcontextprotocol.io)
 [![tests](https://img.shields.io/badge/tests-102%20green-brightgreen?style=for-the-badge)](#)
-[![estate](https://img.shields.io/badge/estate-barn-yellow?style=for-the-badge)](https://github.com/toxicwind/estate)
+[![Pens](https://img.shields.io/badge/Pens-barn-yellow?style=for-the-badge)](https://github.com/toxicwind/Pens)
 
 **See, drive, and debug any Android device over ADB — with first-class device profiles so one server targets the whole fleet.**
 
@@ -17,7 +17,7 @@
 
 ## Why this exists
 
-The estate's Android fleet is heterogeneous: a **Hisense Android TV** and a
+The Pens's Android fleet is heterogeneous: a **Hisense Android TV** and a
 **Pixel 9 Pro XL**, each a different device with a different ADB target. Driving
 them raw by serial is fragile (and the Pixel's ADB port *rotates* on re-pair).
 `android-mcp` wraps ADB behind the Model Context Protocol and adds a **device
@@ -178,7 +178,7 @@ pinned in `pens/agentic-moment/products/site/compare/fixtures/android-mcp-compar
 
 ## 📦 Source
 
-`pens/barn/products/android-mcp/` (canonical). Registered in the estate as the
+`pens/barn/products/android-mcp/` (canonical). Registered in the Pens as the
 `android-mcp` MCP upstream (`thresher` → `node dist/index.js`), default profile
 Hisense TV. Deploy after edits: `pnpm build && /usr/local/bin/android-mcp` →
 `~/.local/bin/android-mcp` symlink.

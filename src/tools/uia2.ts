@@ -101,7 +101,7 @@ export async function uia2Tap(x: number, y: number, displayId: number, opts?: Ad
       actions: [
         {
           type: "pointer",
-          id: "estate-finger",
+          id: "Pens-finger",
           parameters: { pointerType: "touch" },
           actions: [
             { type: "pointerMove", duration: 0, x, y },
